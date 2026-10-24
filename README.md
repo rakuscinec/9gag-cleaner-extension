@@ -7,8 +7,8 @@ sort and select them by date, and deletes them in bulk.
 
 ![Screenshot](store/screenshot-1.png)
 
-- [Privacy policy](https://rakuscinec.github.io/9gag-cleaner-extension/privacy-policy.html)
-- [Report a problem](https://github.com/rakuscinec/9gag-cleaner-extension/issues)
+- [Privacy policy](https://rakuscinec.github.io/comment-cleaner-for-9gag/privacy-policy.html)
+- [Report a problem](https://github.com/rakuscinec/comment-cleaner-for-9gag/issues)
 
 ## Features
 

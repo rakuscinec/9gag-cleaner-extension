@@ -66,12 +66,12 @@ Comment Cleaner for 9GAG is an independent project and is not affiliated with, e
 
 **Homepage URL**
 ```
-https://rakuscinec.github.io/9gag-cleaner-extension/
+https://rakuscinec.github.io/comment-cleaner-for-9gag/
 ```
 
 **Support URL**
 ```
-https://github.com/rakuscinec/9gag-cleaner-extension/issues
+https://github.com/rakuscinec/comment-cleaner-for-9gag/issues
 ```
 
 ---
@@ -131,7 +131,7 @@ Tick all three certifications:
 
 **Privacy policy URL**
 ```
-https://rakuscinec.github.io/9gag-cleaner-extension/privacy-policy.html
+https://rakuscinec.github.io/comment-cleaner-for-9gag/privacy-policy.html
 ```
 
 ---
