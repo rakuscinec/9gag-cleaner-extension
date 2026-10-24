@@ -1,31 +1,32 @@
 'use strict';
 
-/* ---------- stav ---------- */
+/* ---------- state ---------- */
 let bridgeTabId = null;
 let identity = null;      // { name, accountId, commentAuth }
 let commentOptions = null; // { appId, host, cdnHost }
-let items = [];           // zoznam komentárov
+let items = [];           // list of comments
 let sortKey = 'created';
 let sortDesc = true;
 let processing = false;
 let stopLoading = false;
+let loggedOut = false;    // the startup session check found that nobody is signed in
 
-// Záloha, keby sa nepodarilo prečítať window._config z 9gag.com
+// Fallback in case window._config cannot be read from 9gag.com
 const DEFAULT_COMMENT_OPTIONS = {
   appId: 'a_dd8f2b7d304a10edaf6f29517ea0ca4100a43d1b',
   host: 'comment.9gag.com',
   cdnHost: 'comment-cdn.9gag.com'
 };
 
-/* ---------- pomocné ---------- */
+/* ---------- helpers ---------- */
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function pad2(n) { return String(n).padStart(2, '0'); }
 
-// Český formát: d.m.rrrr HH:MM:SS
+// Format: YYYY-MM-DD HH:MM:SS
 function formatDateTime(ts) {
   const d = new Date(ts);
-  return `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
 }
 
 function log(msg) {
@@ -72,8 +73,8 @@ async function ensureBridgeTab() {
   return bridgeTabId;
 }
 
-// Spúšťame v kontexte stránky (MAIN), aby požiadavky na comment.9gag.com išli presne ako
-// z webu 9GAG — z izolovaného sveta content scriptu sa komentáre nenačítali.
+// Runs in the page context (MAIN) so requests to comment.9gag.com behave exactly like
+// those made by the 9GAG website — from the content script's isolated world, comments did not load.
 async function exec(tabId, func, args) {
   const [{ result }] = await chrome.scripting.executeScript({
     target: { tabId },
@@ -87,6 +88,7 @@ async function exec(tabId, func, args) {
 async function loadIdentity() {
   await ensureBridgeTab();
   identity = await exec(bridgeTabId, __ng_getIdentity);
+  loggedOut = false;
   if (!commentOptions) {
     const opts = await exec(bridgeTabId, __ng_getCommentOptions).catch(() => null);
     commentOptions = (opts && opts.appId && opts.host) ? opts : DEFAULT_COMMENT_OPTIONS;
@@ -94,7 +96,7 @@ async function loadIdentity() {
   return identity;
 }
 
-/* ---------- správa účtov cez cookies ---------- */
+/* ---------- account management via cookies ---------- */
 const GAG_COOKIE_DOMAIN = '9gag.com';
 let pendingLoginTabId = null;
 let pendingLoginPoll = null;
@@ -138,7 +140,7 @@ async function activateAccount(username) {
   const acc = accounts[username];
   if (!acc) return;
 
-  setStatus('Prepínam na účet @' + username + '...');
+  setStatus('Switching to account @' + username + '...');
   await clearGagCookies();
   await restoreCookies(acc.cookies);
   await chrome.storage.local.set({ activeAccount: username });
@@ -151,11 +153,11 @@ async function activateAccount(username) {
 
   try {
     await loadIdentity();
-    log('Prepnuté na účet @' + identity.name + '.');
-    setStatus('Aktívny účet: @' + identity.name);
+    log('Switched to account @' + identity.name + '.');
+    setStatus('Active account: @' + identity.name);
   } catch (e) {
-    log('CHYBA pri prepnutí na @' + username + ': ' + e.message);
-    setStatus('Chyba pri prepnutí účtu: ' + e.message);
+    log('ERROR switching to @' + username + ': ' + e.message);
+    setStatus('Error switching account: ' + e.message);
   }
   await refreshAccountUI();
 }
@@ -177,37 +179,37 @@ function cancelPendingLogin(reason) {
     pendingLoginTabId = null;
   }
   setAddAccountUIWaiting(false);
-  setStatus(reason || 'Čakanie na prihlásenie zrušené.');
+  setStatus(reason || 'Waiting for sign-in cancelled.');
 }
 
 async function addAccount() {
   if (pendingLoginTabId) return;
 
   setAddAccountUIWaiting(true);
-  setStatus('Odhlasujem aktuálny účet na 9GAG, aby šlo prihlásiť nový...');
-  // Bez vyčistenia cookies by 9GAG na /login presmeroval späť na už prihláseného používateľa.
+  setStatus('Signing out of the current 9GAG account so a new one can sign in...');
+  // Without clearing cookies, 9GAG would redirect /login back to the already signed-in user.
   await clearGagCookies();
   identity = null;
   bridgeTabId = null;
   await refreshAccountUI();
 
-  // Kontrolu identity robíme cez samostatnú bridge kartu, nie cez prihlasovaciu kartu,
-  // ktorá sa počas prihlasovania presmerováva a skript v nej nemusí dobehnúť.
+  // Identity is checked through a separate bridge tab, not the sign-in tab, which
+  // redirects during sign-in and a script in it might not finish.
   await ensureBridgeTab();
 
   const tab = await chrome.tabs.create({ url: 'https://9gag.com/login', active: true });
   pendingLoginTabId = tab.id;
-  log('Otvorená karta na prihlásenie na 9GAG (tab ' + tab.id + '). Prihlás sa PRESNE v nej — účet sa zachytí automaticky.');
-  setStatus('Čakám, kým sa prihlásiš v novootvorenej karte... (pokus 0)');
+  log('Opened a 9GAG sign-in tab (tab ' + tab.id + '). Sign in in EXACTLY that tab — the account will be detected automatically.');
+  setStatus('Waiting for you to sign in in the newly opened tab... (attempt 0)');
 
   let attempts = 0;
-  const maxAttempts = 150; // ~5 min pri intervale 2 s
+  const maxAttempts = 150; // ~5 min at a 2 s interval
 
   pendingLoginPoll = setInterval(async () => {
     attempts++;
     const stillOpen = await chrome.tabs.get(pendingLoginTabId).catch(() => null);
     if (!stillOpen) {
-      cancelPendingLogin('Karta na prihlásenie bola zatvorená, zrušené.');
+      cancelPendingLogin('The sign-in tab was closed, cancelled.');
       return;
     }
     try {
@@ -221,18 +223,18 @@ async function addAccount() {
       await chrome.tabs.remove(pendingLoginTabId).catch(() => {});
       pendingLoginTabId = null;
       setAddAccountUIWaiting(false);
-      log('Uložený nový účet: @' + id.name);
-      setStatus('Účet @' + id.name + ' uložený a aktivovaný.');
+      log('Saved new account: @' + id.name);
+      setStatus('Account @' + id.name + ' saved and activated.');
       await refreshAccountUI();
     } catch (e) {
       if (attempts >= maxAttempts) {
-        cancelPendingLogin('Vypršal čas na prihlásenie (5 min). Naposledy: ' + e.message);
-        log('Prihlásenie sa nepodarilo zachytiť do 5 minút. Posledná chyba: ' + e.message);
+        cancelPendingLogin('Sign-in timed out (5 min). Last error: ' + e.message);
+        log('Could not detect a sign-in within 5 minutes. Last error: ' + e.message);
         return;
       }
-      setStatus('Čakám na prihlásenie v novej karte... (pokus ' + attempts + '/' + maxAttempts + ', zatiaľ neprihlásený)');
+      setStatus('Waiting for sign-in in the new tab... (attempt ' + attempts + '/' + maxAttempts + ', not signed in yet)');
       if (attempts % 5 === 0) {
-        log('Stále čakám na prihlásenie (pokus ' + attempts + '). Dôvod: ' + e.message);
+        log('Still waiting for sign-in (attempt ' + attempts + '). Reason: ' + e.message);
       }
     }
   }, 2000);
@@ -240,7 +242,8 @@ async function addAccount() {
 
 async function refreshAccountUI() {
   const { accounts = {}, activeAccount } = await chrome.storage.local.get(['accounts', 'activeAccount']);
-  const currentName = identity ? identity.name : activeAccount;
+  // If the session check failed, don't show the last active saved account as signed in.
+  const currentName = identity ? identity.name : (loggedOut ? null : activeAccount);
   const list = document.getElementById('accountList');
   list.innerHTML = '';
 
@@ -248,7 +251,7 @@ async function refreshAccountUI() {
   if (!names.length) {
     const empty = document.createElement('div');
     empty.className = 'account-empty';
-    empty.textContent = 'Zatiaľ žiadny uložený účet.';
+    empty.textContent = 'No saved accounts yet.';
     list.appendChild(empty);
   } else {
     for (const name of names) {
@@ -260,10 +263,10 @@ async function refreshAccountUI() {
     }
   }
 
-  document.getElementById('identityBtn').textContent = (currentName ? '@' + currentName : 'Neprihlásený') + ' ▾';
+  document.getElementById('identityBtn').textContent = (currentName ? '@' + currentName : 'Not signed in') + ' ▾';
 }
 
-/* ---------- funkcie spúšťané v kontexte 9gag tabu ---------- */
+/* ---------- functions executed in the 9gag tab ---------- */
 function __ng_getCommentOptions() {
   const c = window._config && window._config.config && window._config.config.commentOptions;
   return c ? { appId: c.appId, host: c.host, cdnHost: c.cdnHost } : null;
@@ -275,16 +278,16 @@ async function __ng_getIdentity() {
     credentials: 'include',
     headers: { 'x-api-version': '2' }
   });
-  if (res.status === 401) throw new Error('Nie si prihlásený na 9GAG.');
+  if (res.status === 401) throw new Error('You are not signed in to 9GAG.');
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const json = await res.json();
   const user = json && json.data && json.data.user;
-  if (!user || !user.username) throw new Error('Nie si prihlásený na 9GAG.');
-  if (!user.commentAuth) throw new Error('9GAG nevrátil commentAuth token pre komentáre.');
+  if (!user || !user.username) throw new Error('You are not signed in to 9GAG.');
+  if (!user.commentAuth) throw new Error('9GAG did not return a commentAuth token for comments.');
   return { name: user.username, accountId: String(user.accountId), commentAuth: user.commentAuth };
 }
 
-// Jedna strana postov, pod ktorými používateľ komentoval (záložka „Comments“ na profile).
+// One page of posts the user has commented on (the "Comments" tab on the profile).
 async function __ng_fetchCommentedPosts(username, cursor) {
   const url = '/v1/user-posts/username/' + encodeURIComponent(username) + '/type/comments' + (cursor ? '?' + cursor : '');
   const res = await fetch(url, {
@@ -296,27 +299,33 @@ async function __ng_fetchCommentedPosts(username, cursor) {
   const json = await res.json();
   const data = json.data || {};
   return {
-    posts: (data.posts || []).map(p => ({ id: p.id, title: p.title || '', url: p.url })),
+    posts: (data.posts || []).map(p => ({ id: p.id, title: p.title || '', url: p.url, commentsCount: p.commentsCount || 0 })),
     nextCursor: data.nextCursor || null
   };
 }
 
-// Prejde všetky komentáre (aj odpovede) pod jedným postom a vráti tie od daného accountId.
-async function __ng_scanPost(opts, postUrl, accountId, maxPages) {
-  async function list(params) {
-    const res = await fetch('https://' + opts.host + '/v2/comment-list.json', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(params)
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const json = await res.json();
-    if (json.status === 'ERROR') throw new Error(json.error || json.code || 'chyba comment API');
-    return json.payload || {};
-  }
+// Walks all comments (including replies) under one post and returns those by the given accountId.
+async function __ng_scanPost(opts, postUrl, accountId, maxPages, threadConcurrency) {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  // On 429 / 5xx, retry with an increasing delay so parallel requests don't fail the whole post.
+  async function list(params) {
+    for (let attempt = 0; ; attempt++) {
+      const res = await fetch('https://' + opts.host + '/v2/comment-list.json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(params)
+      });
+      if ((res.status === 429 || res.status >= 500) && attempt < 4) {
+        await sleep(1000 * 2 ** attempt);
+        continue;
+      }
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const json = await res.json();
+      if (json.status === 'ERROR') throw new Error(json.error || json.code || 'comment API error');
+      return json.payload || {};
+    }
+  }
   const mine = [];
-  const authors = new Set(); // diagnostika: accountId autorov, ak by sa nič nenašlo
   let scanned = 0;
   let pages = 0;
   let truncated = false;
@@ -324,7 +333,6 @@ async function __ng_scanPost(opts, postUrl, accountId, maxPages) {
   function collect(comments) {
     for (const c of comments || []) {
       scanned++;
-      if (c.user && authors.size < 5) authors.add(c.user.displayName + '=' + c.user.accountId);
       if (c.user && String(c.user.accountId) === accountId && !c.isDeleted) {
         mine.push({
           commentId: c.commentId,
@@ -340,30 +348,48 @@ async function __ng_scanPost(opts, postUrl, accountId, maxPages) {
     }
   }
 
-  // Najprv koreňové komentáre, pri každom s odpoveďami aj jeho vlákno.
-  let params = { appId: opts.appId, url: postUrl, count: '50', type: 'old' };
-  while (params) {
-    if (pages >= maxPages) { truncated = true; break; }
-    const page = await list(params);
-    pages++;
-    collect(page.comments);
-    for (const c of page.comments || []) {
-      if (!c.childrenTotal || !c.childrenUrl) continue;
-      let childParams = Object.fromEntries(new URLSearchParams(c.childrenUrl));
-      childParams.count = '50';
-      // Vlákna sa do limitu strán nerátajú — inak by sa pri veľkých postoch
-      // limit minul na odpovede skôr, než by sa prešli všetky koreňové komentáre.
-      while (childParams) {
-        const child = await list(childParams);
-        collect(child.comments);
-        childParams = child.next ? Object.fromEntries(new URLSearchParams(child.next)) : null;
-        await sleep(150);
-      }
+  async function scanThread(childrenUrl) {
+    let childParams = Object.fromEntries(new URLSearchParams(childrenUrl));
+    childParams.count = '50';
+    while (childParams) {
+      const child = await list(childParams);
+      collect(child.comments);
+      childParams = child.next ? Object.fromEntries(new URLSearchParams(child.next)) : null;
     }
-    params = page.next ? Object.fromEntries(new URLSearchParams(page.next)) : null;
-    await sleep(150);
   }
-  return { comments: mine, pages, truncated, scanned, authors: [...authors] };
+
+  // Top-level comments are paged sequentially (cursor); their reply threads load in parallel
+  // and alongside the next page. Threads don't count toward the page limit — otherwise on
+  // large posts the limit would be used up on replies before all top-level comments were read.
+  const threadUrls = [];
+  let rootsDone = false;
+  async function threadWorker() {
+    while (true) {
+      const url = threadUrls.shift();
+      if (url) { await scanThread(url); continue; }
+      if (rootsDone) return;
+      await sleep(50);
+    }
+  }
+  const workers = Array.from({ length: threadConcurrency }, threadWorker);
+
+  try {
+    let params = { appId: opts.appId, url: postUrl, count: '50', type: 'old' };
+    while (params) {
+      if (pages >= maxPages) { truncated = true; break; }
+      const page = await list(params);
+      pages++;
+      collect(page.comments);
+      for (const c of page.comments || []) {
+        if (c.childrenTotal && c.childrenUrl) threadUrls.push(c.childrenUrl);
+      }
+      params = page.next ? Object.fromEntries(new URLSearchParams(page.next)) : null;
+    }
+  } finally {
+    rootsDone = true;
+  }
+  await Promise.all(workers);
+  return { comments: mine, pages, truncated, scanned };
 }
 
 async function __ng_deleteComment(opts, auth, commentId, postUrl) {
@@ -374,11 +400,11 @@ async function __ng_deleteComment(opts, auth, commentId, postUrl) {
   });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const json = await res.json().catch(() => null);
-  if (json && json.status === 'ERROR') throw new Error(json.error || json.code || 'chyba pri mazaní');
+  if (json && json.status === 'ERROR') throw new Error(json.error || json.code || 'delete failed');
   return true;
 }
 
-/* ---------- načítanie obsahu ---------- */
+/* ---------- loading content ---------- */
 function mapComment(c, post) {
   return {
     kind: c.level > 1 ? 'reply' : 'comment',
@@ -394,6 +420,57 @@ function mapComment(c, post) {
   };
 }
 
+/* ---------- progress ---------- */
+let progress = null;
+let renderTimer = null;
+
+// Re-render the table at most once per second — with parallel scanning, comments arrive
+// from several posts at once and a full re-render is expensive.
+function scheduleRender() {
+  if (renderTimer) return;
+  renderTimer = setTimeout(() => {
+    renderTimer = null;
+    sortItems();
+    renderTable();
+  }, 1000);
+}
+
+function formatDuration(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return s + ' s';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + ' min ' + pad2(s % 60) + ' s';
+  return Math.floor(m / 60) + ' h ' + pad2(m % 60) + ' min';
+}
+
+function renderProgress() {
+  const wrap = document.getElementById('progressWrap');
+  if (!progress) { wrap.hidden = true; return; }
+  wrap.hidden = false;
+  const p = progress;
+  // Weighted by each post's comment count (as reported by 9GAG), not by number of posts — large posts take longer.
+  const ratio = p.commentsKnown ? Math.min(1, p.commentsDone / p.commentsKnown) : 0;
+  document.getElementById('progressFill').style.width = (p.finished ? 100 : ratio * 100).toFixed(1) + '%';
+
+  const elapsed = Date.now() - p.startTs;
+  let eta;
+  if (p.finished) {
+    eta = 'Done in ' + formatDuration(elapsed);
+  } else if (p.commentsDone > 0 && elapsed > 3000) {
+    const rate = p.commentsDone / elapsed;
+    const remaining = (p.commentsKnown - p.commentsDone) / rate;
+    eta = (p.listingDone ? '~' : 'At least ~') + formatDuration(remaining) + ' left';
+  } else {
+    eta = 'Estimating time...';
+  }
+
+  document.getElementById('progressText').textContent =
+    `Posts: ${p.postsDone}/${p.postsFound}${p.listingDone ? '' : '+ (still loading the list)'}` +
+    ` · Comments: ${p.commentsDone.toLocaleString('en')}/${p.commentsKnown.toLocaleString('en')}` +
+    ` · Yours: ${items.length}`;
+  document.getElementById('progressEta').textContent = eta;
+}
+
 async function loadAll() {
   const loadBtn = document.getElementById('loadBtn');
   const stopBtn = document.getElementById('stopLoadBtn');
@@ -401,69 +478,102 @@ async function loadAll() {
   stopBtn.hidden = false;
   stopLoading = false;
   const maxPages = Math.max(1, parseInt(document.getElementById('maxPagesInput').value, 10) || 40);
+  const postConcurrency = Math.min(10, Math.max(1, parseInt(document.getElementById('concurrencyInput').value, 10) || 4));
+  const threadConcurrency = 4;
+  let progressTimer = null;
   try {
-    setStatus('Pripájam sa na 9GAG...');
+    setStatus('Connecting to 9GAG...');
     await loadIdentity();
     await refreshAccountUI();
-
-    setStatus('Načítavam posty, pod ktorými si komentoval...');
-    const posts = [];
-    const seen = new Set();
-    let cursor = null;
-    let guard = 0;
-    do {
-      const page = await exec(bridgeTabId, __ng_fetchCommentedPosts, [identity.name, cursor]);
-      for (const p of page.posts) {
-        if (!seen.has(p.id)) { seen.add(p.id); posts.push(p); }
-      }
-      cursor = page.nextCursor;
-      setStatus('Načítaných postov s tvojimi komentármi: ' + posts.length);
-      guard++;
-      if (cursor) await sleep(500);
-    } while (cursor && guard < 500 && !stopLoading);
-    log('Nájdených ' + posts.length + ' postov, pod ktorými komentoval @' + identity.name + ' (accountId ' + identity.accountId + ').');
 
     items = [];
     renderTable();
     document.getElementById('filterRow').hidden = false;
     document.getElementById('actionRow').hidden = false;
 
-    for (let i = 0; i < posts.length && !stopLoading; i++) {
-      const post = posts[i];
-      setStatus(`Prechádzam komentáre v poste ${i + 1}/${posts.length} (nájdených tvojich: ${items.length})...`);
+    progress = {
+      startTs: Date.now(), postsFound: 0, postsDone: 0,
+      commentsKnown: 0, commentsDone: 0, listingDone: false, finished: false
+    };
+    progressTimer = setInterval(renderProgress, 500);
+    renderProgress();
+    setStatus('Searching for your comments...');
+
+    // Producer: pages through the list of posts and queues them right away, so workers
+    // start scanning from the very first page.
+    const queue = [];
+    const seen = new Set();
+    let listingError = null;
+    const producer = (async () => {
+      let cursor = null;
+      let guard = 0;
       try {
-        const res = await exec(bridgeTabId, __ng_scanPost, [commentOptions, post.url, identity.accountId, maxPages]);
-        for (const c of res.comments) items.push(mapComment(c, post));
-        log('Post ' + post.id + ': prehľadaných ' + res.scanned + ' komentárov (' + res.pages + ' strán), tvojich ' + res.comments.length +
-          (res.comments.length ? '' : '. Vzorka autorov: ' + res.authors.join(', ')));
-        if (res.truncated) {
-          log('Pozor: post „' + (post.title || post.id) + '“ má viac než ' + maxPages + ' strán komentárov — prehľadaná len časť.');
-        }
-        if (res.comments.length) {
-          sortItems();
-          renderTable();
-        }
+        do {
+          const page = await exec(bridgeTabId, __ng_fetchCommentedPosts, [identity.name, cursor]);
+          for (const p of page.posts) {
+            if (seen.has(p.id)) continue;
+            seen.add(p.id);
+            queue.push(p);
+            progress.postsFound++;
+            progress.commentsKnown += p.commentsCount;
+          }
+          cursor = page.nextCursor;
+          guard++;
+        } while (cursor && guard < 500 && !stopLoading);
       } catch (e) {
-        log('CHYBA pri prechádzaní postu ' + post.id + ': ' + e.message);
+        listingError = e;
+        log('ERROR loading the list of posts: ' + e.message);
+      } finally {
+        progress.listingDone = true;
       }
-      await sleep(300);
+    })();
+
+    async function worker() {
+      while (!stopLoading) {
+        const post = queue.shift();
+        if (!post) {
+          if (progress.listingDone) return;
+          await sleep(100);
+          continue;
+        }
+        try {
+          const res = await exec(bridgeTabId, __ng_scanPost, [commentOptions, post.url, identity.accountId, maxPages, threadConcurrency]);
+          for (const c of res.comments) items.push(mapComment(c, post));
+          if (res.comments.length) {
+            log('Post ' + post.id + ': ' + res.comments.length + ' of yours among ' + res.scanned + ' comments.');
+            scheduleRender();
+          }
+          if (res.truncated) {
+            log('Warning: post "' + (post.title || post.id) + '" has more than ' + maxPages + ' pages of comments — only part of it was scanned.');
+          }
+        } catch (e) {
+          log('ERROR scanning post ' + post.id + ': ' + e.message);
+        }
+        progress.postsDone++;
+        progress.commentsDone += post.commentsCount;
+      }
     }
 
+    await Promise.all([producer, ...Array.from({ length: postConcurrency }, worker)]);
+
+    progress.finished = !stopLoading && !listingError;
+    renderProgress();
     sortItems();
     renderTable();
-    const msg = (stopLoading ? 'Zastavené. ' : 'Hotovo. ') + 'Načítaných ' + items.length + ' komentárov.';
+    const msg = (stopLoading ? 'Stopped. ' : 'Done. ') + 'Scanned ' + progress.postsDone + ' posts, found ' + items.length + ' of your comments.';
     setStatus(msg);
     log(msg);
   } catch (e) {
-    setStatus('Chyba: ' + e.message);
-    log('CHYBA pri načítaní: ' + e.message);
+    setStatus('Error: ' + e.message);
+    log('ERROR while loading: ' + e.message);
   } finally {
+    if (progressTimer) clearInterval(progressTimer);
     loadBtn.disabled = false;
     stopBtn.hidden = true;
   }
 }
 
-/* ---------- triedenie a render ---------- */
+/* ---------- sorting and rendering ---------- */
 const SORT_ACCESSORS = {
   kind: item => item.kind,
   created: item => item.created,
@@ -524,7 +634,7 @@ function renderTable() {
       const tdType = document.createElement('td');
       const badge = document.createElement('span');
       badge.className = 'badge ' + item.kind;
-      badge.textContent = item.kind === 'reply' ? 'odpoveď' : 'komentár';
+      badge.textContent = item.kind === 'reply' ? 'reply' : 'comment';
       tdType.appendChild(badge);
 
       const tdDate = document.createElement('td');
@@ -546,7 +656,7 @@ function renderTable() {
       snippetLink.target = '_blank';
       snippetLink.rel = 'noopener noreferrer';
       snippetLink.title = item.snippet;
-      snippetLink.textContent = item.snippet || '(bez textu)';
+      snippetLink.textContent = item.snippet || '(no text)';
       tdSnippet.appendChild(snippetLink);
 
       const tdStatus = document.createElement('td');
@@ -563,22 +673,22 @@ function renderTable() {
 
 function statusLabel(s) {
   switch (s) {
-    case 'pending': return 'čaká';
-    case 'processing': return 'spracúva sa...';
-    case 'done': return 'zmazané';
-    case 'error': return 'chyba';
-    case 'skipped': return 'preskočené';
+    case 'pending': return 'pending';
+    case 'processing': return 'processing...';
+    case 'done': return 'deleted';
+    case 'error': return 'error';
+    case 'skipped': return 'skipped';
     default: return s;
   }
 }
 
 function updateSelectedCount() {
   const n = items.filter(i => i.selected && i.status === 'pending').length;
-  document.getElementById('selectedCount').textContent = 'Vybraných: ' + n;
+  document.getElementById('selectedCount').textContent = 'Selected: ' + n;
   document.getElementById('deleteBtn').disabled = n === 0 || processing;
 }
 
-/* ---------- výberové nástroje ---------- */
+/* ---------- selection tools ---------- */
 function selectAll(v) {
   items.forEach(i => { if (i.status === 'pending') i.selected = v; });
   renderTable();
@@ -610,16 +720,16 @@ function selectDateRange(fromTs, toTs) {
   renderTable();
 }
 
-/* ---------- zmazanie ---------- */
+/* ---------- deletion ---------- */
 async function processSelected() {
   processing = true;
   const selected = items.filter(i => i.selected && i.status === 'pending');
-  log('Spúšťam mazanie ' + selected.length + ' komentárov.');
+  log('Starting deletion of ' + selected.length + ' comments.');
 
   try {
-    await loadIdentity(); // čerstvý commentAuth token
+    await loadIdentity(); // fresh commentAuth token
   } catch (e) {
-    log('CHYBA: nepodarilo sa overiť prihlásenie: ' + e.message);
+    log('ERROR: could not verify sign-in: ' + e.message);
     processing = false;
     return;
   }
@@ -630,25 +740,25 @@ async function processSelected() {
     try {
       await exec(bridgeTabId, __ng_deleteComment, [commentOptions, identity.commentAuth, item.commentId, item.postUrl]);
       item.status = 'done';
-      log('OK: ' + (item.kind === 'reply' ? 'odpoveď' : 'komentár') + ' pod „' + item.postTitle + '“ (' + formatDateTime(item.created) + ') zmazaný.');
+      log('OK: ' + item.kind + ' on "' + item.postTitle + '" (' + formatDateTime(item.created) + ') deleted.');
     } catch (e) {
       item.status = 'error';
-      log('CHYBA (' + item.commentId + '): ' + e.message);
+      log('ERROR (' + item.commentId + '): ' + e.message);
     }
     renderTable();
     await sleep(1100);
   }
 
   processing = false;
-  log('Spracovanie dokončené.');
-  setStatus('Spracovanie dokončené.');
+  log('Processing finished.');
+  setStatus('Processing finished.');
 }
 
-/* ---------- UI eventy ---------- */
+/* ---------- UI events ---------- */
 document.getElementById('loadBtn').addEventListener('click', loadAll);
 document.getElementById('stopLoadBtn').addEventListener('click', () => {
   stopLoading = true;
-  setStatus('Zastavujem načítanie...');
+  setStatus('Stopping...');
 });
 
 document.querySelectorAll('#itemsTable thead th[data-sort-key]').forEach(th => {
@@ -689,14 +799,14 @@ document.getElementById('invertSelBtn').addEventListener('click', invertSelectio
 
 document.getElementById('masterCheck').addEventListener('change', (e) => selectAll(e.target.checked));
 
-/* potvrdzovací modál */
+/* confirmation modal */
 const modal = document.getElementById('confirmModal');
 const confirmOk = document.getElementById('confirmOk');
 
 document.getElementById('deleteBtn').addEventListener('click', () => {
   const n = items.filter(i => i.selected && i.status === 'pending').length;
   if (!n) return;
-  document.getElementById('confirmText').textContent = `Naozaj chceš natrvalo zmazať ${n} komentárov?`;
+  document.getElementById('confirmText').textContent = `Do you really want to permanently delete ${n} comment${n === 1 ? '' : 's'}?`;
   modal.hidden = false;
   confirmOk.focus();
 });
@@ -726,7 +836,24 @@ document.addEventListener('click', (e) => {
 });
 
 document.getElementById('addAccountBtn').addEventListener('click', addAccount);
-document.getElementById('cancelLoginBtn').addEventListener('click', () => cancelPendingLogin('Čakanie na prihlásenie zrušené.'));
+document.getElementById('cancelLoginBtn').addEventListener('click', () => cancelPendingLogin('Waiting for sign-in cancelled.'));
+
+// Check right after opening whether a 9GAG session is active, so the signed-in account
+// shows in the top right without having to click "Load my comments".
+async function checkSessionOnStart() {
+  await refreshAccountUI();
+  document.getElementById('identityBtn').textContent = 'Checking sign-in... ▾';
+  setStatus('Checking 9GAG sign-in...');
+  try {
+    await loadIdentity();
+    setStatus('Signed in as @' + identity.name + '.');
+  } catch (e) {
+    identity = null;
+    loggedOut = true;
+    setStatus('You are not signed in to 9GAG — sign in using the button in the top right.');
+  }
+  await refreshAccountUI();
+}
 
 renderTable();
-refreshAccountUI();
+checkSessionOnStart();

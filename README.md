@@ -1,51 +1,95 @@
-# 9GAG Cleaner
+# Comment Cleaner for 9GAG
 
-Rozšírenie pre Brave/Chrome (Manifest V3), ktoré nájde všetky tvoje komentáre a odpovede na 9GAG,
-umožní ich zoradiť a vybrať podľa dátumu a hromadne ich **zmaže**. Vychádza z Reddit Cleanera
-(rovnaké UI, výber a prepínanie účtov).
+<img src="extension/icons/icon128.png" width="64" align="right" alt="">
 
-## Ako to funguje
+A Chrome / Brave extension (Manifest V3) that finds all your comments and replies on 9GAG, lets you
+sort and select them by date, and deletes them in bulk.
 
-- UI beží ako samostatná stránka rozšírenia otvorená v novom tabe.
-- Na pozadí si udržiava jednu tichú kartu na `9gag.com`, cez ktorú volá needokumentované API, ktoré
-  používa samotný web 9GAG, s tvojím prihlásením:
-  - `POST /v1/user-info` – meno, `accountId` a `commentAuth` token pre komentárový systém,
-  - `POST /v1/user-posts/username/<meno>/type/comments` – posty, pod ktorými si komentoval
-    (záložka „Comments“ na profile),
-  - `POST https://comment.9gag.com/v2/comment-list.json` – komentáre a vlákna odpovedí pod postom,
-  - `POST https://comment.9gag.com/v1/comment.json` s `_method=DELETE` – zmazanie komentára.
-- 9GAG nemá zoznam samotných komentárov používateľa, preto rozšírenie pod každým postom prejde
-  všetky komentáre aj odpovede a vyberie tie s tvojím `accountId`. Pri postoch s tisíckami
-  komentárov to trvá; pole „Max. strán komentárov na post“ (1 strana ≈ 50 hlavných komentárov;
-  vlákna odpovedí sa prechádzajú vždy celé) to obmedzuje a v logu uvidíš, ktoré posty neboli prehľadané celé. Načítanie môžeš
-  kedykoľvek zastaviť – nájdené komentáre zostanú v tabuľke.
+![Screenshot](store/screenshot-1.png)
 
-## Rozdiel oproti Reddit Cleaneru
+- [Privacy policy](https://rakuscinec.github.io/9gag-cleaner-extension/privacy-policy.html)
+- [Report a problem](https://github.com/rakuscinec/9gag-cleaner-extension/issues)
 
-- **Žiadne prepisovanie.** 9GAG neumožňuje komentáre upravovať, takže sa iba rovno mažú.
-- Komentár, ktorý má odpovede, 9GAG po zmazaní ukáže ako „deleted“ (odpovede ostatných zostanú).
+## Features
 
-## Viac účtov
+- Finds every comment and reply you wrote, including ones deep in reply threads
+- Fast parallel scanning that starts as soon as the first posts arrive
+- Progress bar with an estimate of the remaining time
+- Quick selection: older than 1 hour / day / week / month, latest N, date range, select all, invert
+- Sortable table with a link to each comment, plus a log of every action
+- Optional switching between several 9GAG accounts without signing out
 
-Funguje rovnako ako v Reddit Cleaneri – cookies pre `9gag.com` sa pri pridaní účtu uložia do
-`chrome.storage.local` a pri prepnutí sa vymenia.
+## How it works
 
-1. Tlačidlo s menom účtu (vpravo hore) → „+ Prihlásiť nový účet“.
-2. V novej karte `9gag.com/login` sa prihlás (heslo zadávaš priamo na 9gag.com). Rozšírenie
-   prihlásenie zachytí (kontrola každé 2 s), kartu zavrie a účet uloží.
-3. Prepnutie účtu mení prihlásenie na 9GAG pre **celý prehliadač** (daný profil).
+- The UI runs as a standalone extension page opened in a new tab.
+- In the background it keeps one quiet tab on `9gag.com` and, through it, calls the same
+  undocumented API the 9GAG website itself uses, with your own sign-in:
+  - `POST /v1/user-info` – username, `accountId` and the `commentAuth` token for the comment system,
+  - `POST /v1/user-posts/username/<name>/type/comments` – posts you have commented on
+    (the "Comments" tab on your profile),
+  - `POST https://comment.9gag.com/v2/comment-list.json` – comments and reply threads under a post,
+  - `POST https://comment.9gag.com/v1/comment.json` with `_method=DELETE` – deletes a comment.
+- 9GAG has no list of a user's own comments, so the extension walks through every comment and
+  reply under each of those posts and picks the ones with your `accountId`.
+- Scanning is parallel: the list of posts is paged in the background and scanning starts with the
+  first posts right away. Several posts are scanned at once ("Posts in parallel", 4 by default) and
+  reply threads within a post are fetched 4 at a time. Requests answered with 429 / 5xx are retried
+  with a back-off.
+- "Max comment pages per post" (1 page ≈ 50 top-level comments; reply threads are always read in
+  full) caps the time spent on posts with thousands of comments. The log tells you which posts were
+  only partially scanned. You can stop loading at any time — comments found so far stay in the table.
+- The progress bar weights posts by their comment count and estimates the remaining time from the
+  speed so far. While the list of posts is still loading, the estimate is a lower bound ("At least").
+- When the extension opens, it checks right away whether you are signed in to 9GAG and shows the
+  account in the top right.
+- **No overwriting.** 9GAG does not allow editing comments, so they are deleted directly. A comment
+  that has replies is shown by 9GAG as "deleted" (other people's replies remain).
 
-## Inštalácia (Brave aj Chrome)
+## Multiple accounts
 
-1. Otvor `brave://extensions` (alebo `chrome://extensions`).
-2. Zapni „Developer mode“ / „Režim vývojára“.
-3. „Load unpacked“ / „Načítať rozbalené“ → vyber priečinok `9gag-cleaner-extension`.
-4. Klikni na ikonu rozšírenia – otvorí sa nová karta s aplikáciou.
+Cookies for `9gag.com` are saved to `chrome.storage.local` when you add an account and swapped
+when you switch.
 
-## Dôležité upozornenia
+1. Account button (top right) → "+ Sign in to a new account".
+2. Sign in in the new `9gag.com/login` tab (you enter your password directly on 9gag.com). The
+   extension detects the sign-in (checks every 2 s), closes the tab and saves the account.
+3. Switching accounts changes the 9GAG sign-in for the **whole browser** (that profile).
 
-- **Nevratné.** Zmazané komentáre sa nedajú obnoviť.
-- Prvé použitie vyskúšaj na 1–2 starých komentároch a over na 9gag.com, že naozaj zmizli.
-- Medzi zmazaniami je pauza ~1 s kvôli rate-limitom.
-- Ide o neoficiálne API; 9GAG ho môže kedykoľvek zmeniť.
-- Uložené cookies obsahujú prihlasovacie session tokeny – sú len lokálne v tomto prehliadači.
+## Installation from source (Chrome and Brave)
+
+1. Clone or download this repository.
+2. Open `chrome://extensions` (or `brave://extensions`).
+3. Turn on "Developer mode".
+4. Click "Load unpacked" → select the `extension` folder.
+5. Click the extension icon – a new tab with the app opens.
+
+## Repository layout
+
+| Path | Contents |
+|---|---|
+| `extension/` | The extension itself – this is what gets packaged |
+| `docs/` | GitHub Pages site (project page and privacy policy) |
+| `store/` | Chrome Web Store listing texts, screenshot and promo tile |
+| `assets/` | Source SVG of the icon |
+| `scripts/build.sh` | Builds `dist/comment-cleaner-for-9gag-<version>.zip` for the Web Store |
+
+To build the Web Store package:
+
+```bash
+./scripts/build.sh
+```
+
+## Important notes
+
+- **Irreversible.** Deleted comments cannot be restored.
+- Try it first on 1–2 old comments and check on 9gag.com that they are really gone.
+- There is a ~1 s pause between deletions because of rate limits.
+- This uses an unofficial API; 9GAG may change it at any time.
+- Saved cookies contain sign-in session tokens – they are stored only locally in this browser and
+  are never sent anywhere other than 9gag.com.
+
+This project is not affiliated with, endorsed by or sponsored by 9GAG.
+
+## License
+
+[MIT](LICENSE)

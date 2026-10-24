@@ -1,6 +1,6 @@
-// Tento "popup" sa nikdy nezobrazí — okamžite presmeruje na plnú stránku
-// app.html v novom tabe a sám seba zatvorí, aby rozšírenie fungovalo
-// ako celá stránka, nie ako trvalé popup okno.
+// This "popup" is never shown — it immediately redirects to the full app.html page
+// in a new tab and closes itself, so the extension works as a full page rather than
+// a persistent popup window.
 (async () => {
   const url = chrome.runtime.getURL('app.html');
   const existing = await chrome.tabs.query({ url });

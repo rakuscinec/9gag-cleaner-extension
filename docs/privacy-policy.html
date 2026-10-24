@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy – Comment Cleaner for 9GAG</title>
+<style>
+  :root { --bg: #ffffff; --text: #1d2129; --muted: #5b6370; --accent: #0077d6; --border: #e3e6eb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1115; --text: #e7e9ee; --muted: #9aa2b1; --accent: #4db8ff; --border: #2a2f3a; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 16px 64px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h2 { font-size: 19px; margin: 32px 0 8px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .meta { color: var(--muted); margin: 0 0 24px; }
+  a { color: var(--accent); }
+  code { font-size: 14px; }
+  ul { padding-left: 22px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Privacy Policy</h1>
+  <p class="meta"><a href="./">Comment Cleaner for 9GAG</a> · Effective date: 25 October 2026</p>
+
+  <p>Comment Cleaner for 9GAG ("the extension") is a browser extension that helps you find and delete
+  your own comments on 9gag.com. This policy explains what data the extension handles and how. In short:
+  <strong>everything stays in your browser. The extension has no server, collects no analytics and sends
+  your data to no one except 9gag.com itself.</strong></p>
+
+  <h2>Data the extension handles</h2>
+  <ul>
+    <li><strong>Your 9GAG account details</strong> – your username, account ID and the comment
+      authorization token that 9GAG returns to its own website. They are used only to identify your
+      comments and to send delete requests on your behalf. They are kept in memory while the extension
+      page is open and are not stored.</li>
+    <li><strong>Your comments</strong> – the text, date, score and post title of comments you wrote, plus
+      the list of posts you commented on. They are loaded from 9gag.com, shown in the extension page and
+      discarded when you close it.</li>
+    <li><strong>9GAG session cookies (only if you use "Sign in to a new account")</strong> – to let you
+      switch between several 9GAG accounts without signing out, the extension saves the cookies of each
+      account you add in <code>chrome.storage.local</code>, which is local storage inside your browser
+      profile. They are restored only to 9gag.com when you switch accounts.</li>
+  </ul>
+  <p>The extension never sees or stores your 9GAG password. You always sign in directly on 9gag.com.</p>
+
+  <h2>Where your data goes</h2>
+  <p>The extension communicates only with 9GAG's own servers (<code>9gag.com</code> and
+  <code>comment.9gag.com</code>), using the same requests the 9GAG website makes when you browse it
+  while signed in. It does not send any data to the developer or to any third party. It contains no
+  analytics, tracking, advertising or remote code.</p>
+
+  <h2>Sharing and sale of data</h2>
+  <p>Your data is not sold, transferred or shared with anyone, is not used for advertising, and is not
+  used to determine creditworthiness or for lending purposes. It is used for no purpose other than the
+  extension's single function: finding and deleting your own 9GAG comments.</p>
+
+  <h2>Retention and deletion</h2>
+  <ul>
+    <li>Loaded comments and account details are held only in memory and disappear when you close the
+      extension page.</li>
+    <li>Saved account cookies remain in <code>chrome.storage.local</code> until you remove the extension
+      or clear the extension's data. Removing the extension deletes them.</li>
+    <li>Comments you delete with the extension are deleted on 9GAG and cannot be restored by the extension.</li>
+  </ul>
+
+  <h2>Security</h2>
+  <p>Saved session cookies give access to the corresponding 9GAG accounts. Anyone with access to your
+  browser profile could use them, just as they could use your normal 9gag.com sign-in. On a shared
+  computer, sign out of 9GAG or remove the extension after use.</p>
+
+  <h2>Permissions</h2>
+  <ul>
+    <li><code>host_permissions: *.9gag.com</code> – to read your comments and delete the ones you select.</li>
+    <li><code>scripting</code> – to run those requests inside a 9gag.com tab, with your existing sign-in.</li>
+    <li><code>tabs</code> – to find or open the 9gag.com tab used for those requests and to open the 9GAG sign-in page.</li>
+    <li><code>cookies</code> – to save and restore 9GAG session cookies for the optional multi-account switching.</li>
+    <li><code>storage</code> – to keep the list of saved accounts locally.</li>
+  </ul>
+
+  <h2>Children</h2>
+  <p>The extension is not directed at children and does not knowingly handle data of children under 13.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, the updated version will be published at this address with a new effective date.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy: <a href="mailto:schrapnel@gmail.com">schrapnel@gmail.com</a></p>
+
+  <p class="meta">Comment Cleaner for 9GAG is an independent project and is not affiliated with,
+  endorsed by or sponsored by 9GAG.</p>
+</main>
+</body>
+</html>

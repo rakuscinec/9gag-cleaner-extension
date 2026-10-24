@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Comment Cleaner for 9GAG</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="topbar">
+  <h1>Comment Cleaner for 9GAG</h1>
+  <div class="identity-wrap">
+    <button id="identityBtn" class="identity-btn">Not signed in ▾</button>
+    <div id="accountMenu" class="account-menu" hidden>
+      <div id="accountList" class="account-list"></div>
+      <div class="account-menu-actions">
+        <button id="addAccountBtn" class="btn small">+ Sign in to a new account</button>
+        <button id="cancelLoginBtn" class="btn small" hidden>Cancel waiting</button>
+        <p id="loginHint" class="hint" hidden>
+          Sign in in exactly the newly opened 9gag.com/login tab (not another tab or an
+          Incognito window — those have a separate sign-in).
+        </p>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="panel controls" id="controlsPanel">
+  <div class="control-row">
+    <button id="loadBtn" class="btn primary">Load my comments</button>
+    <button id="stopLoadBtn" class="btn small" hidden>Stop loading</button>
+    <div class="filter-group">
+      <label for="maxPagesInput">Max comment pages per post</label>
+      <input type="number" id="maxPagesInput" min="1" value="40" class="input-small">
+    </div>
+    <div class="filter-group">
+      <label for="concurrencyInput">Posts in parallel</label>
+      <input type="number" id="concurrencyInput" min="1" max="10" value="4" class="input-small">
+    </div>
+    <span id="statusText" class="status-text"></span>
+  </div>
+  <div id="progressWrap" class="progress-wrap" hidden>
+    <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+    <div class="progress-meta">
+      <span id="progressText"></span>
+      <span id="progressEta" class="progress-eta"></span>
+    </div>
+  </div>
+  <p class="hint">9GAG has no list of a user's own comments — the extension loads the posts you have commented on and walks through their comments and replies to find yours. Scanning starts with the first posts right away and covers several posts at once ("Posts in parallel"; more is faster but makes it more likely that 9GAG starts throttling requests). The page limit (50 top-level comments per page; reply threads are always read in full) caps the time spent on posts with thousands of comments.</p>
+
+  <div class="control-row" id="filterRow" hidden>
+    <div class="filter-group">
+      <label>Quick select by age</label>
+      <div class="btn-row">
+        <button class="btn small quick-select" data-ms="3600000">Older than 1 hour</button>
+        <button class="btn small quick-select" data-ms="86400000">Older than 1 day</button>
+        <button class="btn small quick-select" data-ms="604800000">Older than 1 week</button>
+        <button class="btn small quick-select" data-ms="2592000000">Older than 1 month</button>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <label>Latest N items</label>
+      <div class="btn-row">
+        <input type="number" id="lastNInput" min="1" value="10" class="input-small">
+        <button id="lastNBtn" class="btn small">Select</button>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <label>Date range</label>
+      <div class="btn-row">
+        <input type="date" id="dateFrom" class="input-small">
+        <span>–</span>
+        <input type="date" id="dateTo" class="input-small">
+        <button id="dateRangeBtn" class="btn small">Select</button>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <label>Bulk</label>
+      <div class="btn-row">
+        <button id="selectAllBtn" class="btn small">Select all</button>
+        <button id="clearSelBtn" class="btn small">Clear selection</button>
+        <button id="invertSelBtn" class="btn small">Invert selection</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="control-row" id="actionRow" hidden>
+    <span id="selectedCount" class="selected-count">Selected: 0</span>
+    <button id="deleteBtn" class="btn danger" disabled>Delete selected</button>
+  </div>
+</section>
+
+<section class="panel table-panel">
+  <table id="itemsTable">
+    <thead>
+      <tr>
+        <th class="col-check"><input type="checkbox" id="masterCheck"></th>
+        <th data-sort-key="kind">Type<span class="sort-arrow"></span></th>
+        <th data-sort-key="created">Date<span class="sort-arrow"></span></th>
+        <th data-sort-key="post">Post<span class="sort-arrow"></span></th>
+        <th data-sort-key="score">Score<span class="sort-arrow"></span></th>
+        <th data-sort-key="snippet">Content<span class="sort-arrow"></span></th>
+        <th data-sort-key="status">Status<span class="sort-arrow"></span></th>
+      </tr>
+    </thead>
+    <tbody id="itemsBody"></tbody>
+  </table>
+  <div id="emptyState" class="empty-state">Nothing loaded yet. Click "Load my comments".</div>
+</section>
+
+<section class="panel log-panel">
+  <h2>Log</h2>
+  <pre id="logOutput"></pre>
+</section>
+
+<div id="confirmModal" class="modal-backdrop" hidden>
+  <div class="modal">
+    <h2>Confirm deletion</h2>
+    <p id="confirmText"></p>
+    <p>This action <strong>cannot be undone</strong>. The comments will be permanently deleted.</p>
+    <div class="modal-actions">
+      <button id="confirmCancel" class="btn">Cancel</button>
+      <button id="confirmOk" class="btn danger">Confirm and start</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
