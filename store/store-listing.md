@@ -63,6 +63,7 @@ Comment Cleaner for 9GAG is an independent project and is not affiliated with, e
 - Store icon 128×128: `../extension/icons/icon128.png`
 - Screenshot 1280×800: `screenshot-1.png`
 - Small promo tile 440×280: `promo-small-440x280.png`
+- Marquee promo tile 1400×560: `promo-marquee-1400x560.png`
 
 **Homepage URL**
 ```
