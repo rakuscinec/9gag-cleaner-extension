@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<title>9GAG Cleaner</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="topbar">
+  <h1>9GAG Cleaner</h1>
+  <div class="identity-wrap">
+    <button id="identityBtn" class="identity-btn">Neprihlásený ▾</button>
+    <div id="accountMenu" class="account-menu" hidden>
+      <div id="accountList" class="account-list"></div>
+      <div class="account-menu-actions">
+        <button id="addAccountBtn" class="btn small">+ Prihlásiť nový účet</button>
+        <button id="cancelLoginBtn" class="btn small" hidden>Zrušiť čakanie</button>
+        <p id="loginHint" class="hint" hidden>
+          Prihlás sa presne v novo otvorenej karte s adresou 9gag.com/login (nie v inej karte
+          ani v Inkognito okne — tie majú iné prihlásenie).
+        </p>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="panel controls" id="controlsPanel">
+  <div class="control-row">
+    <button id="loadBtn" class="btn primary">Načítať moje komentáre</button>
+    <button id="stopLoadBtn" class="btn small" hidden>Zastaviť načítanie</button>
+    <div class="filter-group">
+      <label for="maxPagesInput">Max. strán komentárov na post</label>
+      <input type="number" id="maxPagesInput" min="1" value="40" class="input-small">
+    </div>
+    <span id="statusText" class="status-text"></span>
+  </div>
+  <p class="hint">9GAG nemá zoznam samotných komentárov používateľa — rozšírenie načíta posty, pod ktorými si komentoval, a v každom z nich prejde komentáre a odpovede a nájde tie tvoje. Pri postoch s tisíckami komentárov to trvá dlhšie; limit strán (po 50 hlavných komentárov, odpovede sa prechádzajú vždy celé) to obmedzuje.</p>
+
+  <div class="control-row" id="filterRow" hidden>
+    <div class="filter-group">
+      <label>Rýchly výber podľa veku (staršie ako)</label>
+      <div class="btn-row">
+        <button class="btn small quick-select" data-ms="3600000">Staršie ako 1 hodina</button>
+        <button class="btn small quick-select" data-ms="86400000">Staršie ako 1 deň</button>
+        <button class="btn small quick-select" data-ms="604800000">Staršie ako 1 týždeň</button>
+        <button class="btn small quick-select" data-ms="2592000000">Staršie ako 1 mesiac</button>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <label>Posledných N položiek</label>
+      <div class="btn-row">
+        <input type="number" id="lastNInput" min="1" value="10" class="input-small">
+        <button id="lastNBtn" class="btn small">Vybrať</button>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <label>Dátumový rozsah</label>
+      <div class="btn-row">
+        <input type="date" id="dateFrom" class="input-small">
+        <span>–</span>
+        <input type="date" id="dateTo" class="input-small">
+        <button id="dateRangeBtn" class="btn small">Vybrať</button>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <label>Hromadne</label>
+      <div class="btn-row">
+        <button id="selectAllBtn" class="btn small">Vybrať všetko</button>
+        <button id="clearSelBtn" class="btn small">Zrušiť výber</button>
+        <button id="invertSelBtn" class="btn small">Invertovať výber</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="control-row" id="actionRow" hidden>
+    <span id="selectedCount" class="selected-count">Vybraných: 0</span>
+    <button id="deleteBtn" class="btn danger" disabled>Zmazať vybrané</button>
+  </div>
+</section>
+
+<section class="panel table-panel">
+  <table id="itemsTable">
+    <thead>
+      <tr>
+        <th class="col-check"><input type="checkbox" id="masterCheck"></th>
+        <th data-sort-key="kind">Typ<span class="sort-arrow"></span></th>
+        <th data-sort-key="created">Dátum<span class="sort-arrow"></span></th>
+        <th data-sort-key="post">Post<span class="sort-arrow"></span></th>
+        <th data-sort-key="score">Skóre<span class="sort-arrow"></span></th>
+        <th data-sort-key="snippet">Obsah<span class="sort-arrow"></span></th>
+        <th data-sort-key="status">Stav<span class="sort-arrow"></span></th>
+      </tr>
+    </thead>
+    <tbody id="itemsBody"></tbody>
+  </table>
+  <div id="emptyState" class="empty-state">Zatiaľ nič nenačítané. Klikni na „Načítať moje komentáre“.</div>
+</section>
+
+<section class="panel log-panel">
+  <h2>Log</h2>
+  <pre id="logOutput"></pre>
+</section>
+
+<div id="confirmModal" class="modal-backdrop" hidden>
+  <div class="modal">
+    <h2>Potvrdenie zmazania</h2>
+    <p id="confirmText"></p>
+    <p>Táto akcia je <strong>nevratná</strong>. Komentáre budú natrvalo zmazané.</p>
+    <div class="modal-actions">
+      <button id="confirmCancel" class="btn">Zrušiť</button>
+      <button id="confirmOk" class="btn danger">Potvrdiť a spustiť</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
